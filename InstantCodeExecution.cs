@@ -1,23 +1,36 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
 /// <summary>Editor tool used to execute code in the editor</summary>
 public class InstantCodeExecution : EditorWindow
 {
-	const string ICE_TEMPLATE = "using System;\nusing System.Collections;\nusing System.Collections.Generic;\nusing System.IO;\nusing System.Linq;\nusing UnityEditor;\nusing UnityEditor.SceneManagement;\nusing UnityEngine;\nusing UnityEngine.SceneManagement;\nusing UnityEngine.UI;\nusing Object = UnityEngine.Object;\nusing Random = UnityEngine.Random;\n\nclass ICE : UnityEngine.Object\n{\n\t[InitializeOnLoadMethod]\n\tpublic static void Execute()\n\t{\n\t\t" + PLACEHOLDER_MARK + "\n\n\t\tAssetDatabase.DeleteAsset(\"" + ICE_PATH + "\");\n\t}\n" + FIND_METHODS + SPAWN_METHODS + PLACEMENT_METHODS;
+	const string INCLUDES = "using System;\nusing System.Collections;\nusing System.Collections.Generic;\nusing System.IO;\nusing System.Linq;\nusing UnityEditor;\nusing UnityEditor.SceneManagement;\nusing UnityEngine;\nusing UnityEngine.SceneManagement;\nusing UnityEngine.UI;\nusing Object = UnityEngine.Object;\nusing Random = UnityEngine.Random;";
+	const string ICE_TEMPLATE = "\n\nclass ICE : UnityEngine.Object\n{\n\t[InitializeOnLoadMethod]\n\tpublic static void Execute()\n\t{\n\t\t" + PLACEHOLDER_MARK + "\n\n\t\tAssetDatabase.DeleteAsset(\"" + ICE_PATH + "\");\n\t}\n" + FIND_METHODS + SPAWN_METHODS + PLACEMENT_METHODS;
 
 	const string FIND_METHODS = "\n\tstatic T Find<T>(string name = null, Func<T, bool> customCheck = null) where T : Object\n\t{\n\t\tT[] instances = FindObjectsOfType<T>(true);\n\n\t\tif (string.IsNullOrEmpty(name))\n\t\t{\n\t\t\tif (customCheck != null)\n\t\t\t{\n\t\t\t\tforeach (T instance in instances)\n\t\t\t\t{\n\t\t\t\t\tif (customCheck.Invoke(instance))\n\t\t\t\t\t\treturn instance;\n\t\t\t\t}\n\t\t\t}\n\n\t\t\treturn instances[0];\n\t\t}\n\n\t\tforeach (T instance in instances)\n\t\t{\n\t\t\tbool nameCheck = instance.name == name;\n\n\t\t\tif (nameCheck)\n\t\t\t{\n\t\t\t\tif (customCheck != null && customCheck.Invoke(instance))\n\t\t\t\t\treturn instance;\n\t\t\t\telse\n\t\t\t\t\treturn instance;\n\t\t\t}\n\t\t}\n\n\t\treturn null;\n\t}\n\n\tstatic GameObject Find(string name, Func<GameObject, bool> customCheck = null)\n\t{\n\t\treturn Find<GameObject>(name, customCheck);\n\t}\n\n\tstatic T[] FindAll<T>(string name = null, Func<T, bool> customCheck = null) where T : Object\n\t{\n\t\tT[] instances = FindObjectsOfType<T>(true);\n\t\tList<T> result = new List<T>();\n\n\t\tif (string.IsNullOrEmpty(name))\n\t\t{\n\t\t\tif (customCheck != null)\n\t\t\t{\n\t\t\t\tforeach (T instance in instances)\n\t\t\t\t{\n\t\t\t\t\tif (customCheck.Invoke(instance))\n\t\t\t\t\t\tresult.Add(instance);\n\t\t\t\t}\n\t\t\t}\n\t\t\telse\n\t\t\t\tresult.AddRange(instances);\n\n\t\t\treturn result.ToArray();\n\t\t}\n\n\t\tforeach (T instance in instances)\n\t\t{\n\t\t\tbool nameCheck = instance.name.Contains(name);\n\n\t\t\tif (nameCheck)\n\t\t\t{\n\t\t\t\tif (customCheck != null)\n\t\t\t\t{\n\t\t\t\t\tif (customCheck.Invoke(instance))\n\t\t\t\t\t\tresult.Add(instance);\n\t\t\t\t}\n\t\t\t\telse\n\t\t\t\t\tresult.Add(instance);\n\t\t\t}\n\t\t}\n\n\t\treturn result.ToArray();\n\t}\n\n\tstatic GameObject[] FindAll(string name, Func<GameObject, bool> customCheck = null)\n\t{\n\t\treturn FindAll<GameObject>(name, customCheck);\n\t}\n";
 	const string SPAWN_METHODS = "\n\tstatic T[] SpawnMultiple<T>(T model, int count, Vector3[] positions = null, Quaternion[] rotations = null, Transform[] parents = null) where T : Component\n\t{\n\t\tVector3 defaultPos = model.transform.position;\n\t\tQuaternion defaultRot = model.transform.rotation;\n\t\tList<T> result = new List<T>();\n\n\t\tfor (int i = 0; i < count; i++)\n\t\t{\n\t\t\tVector3 position = defaultPos;\n\n\t\t\tif (positions != null)\n\t\t\t{\n\t\t\t\tif (positions.Length > 1)\n\t\t\t\t\tposition = positions[i];\n\t\t\t\telse\n\t\t\t\t\tposition = positions[0];\n\t\t\t}\n\n\t\t\tQuaternion rotation = defaultRot;\n\n\t\t\tif (rotations != null)\n\t\t\t{\n\t\t\t\tif (rotations.Length > 1)\n\t\t\t\t\trotation = rotations[i];\n\t\t\t\telse\n\t\t\t\t\trotation = rotations[0];\n\t\t\t}\n\n\t\t\tTransform parent = null;\n\n\t\t\tif (parents != null)\n\t\t\t{\n\t\t\t\tif (parents.Length > 1)\n\t\t\t\t\tparent = parents[i];\n\t\t\t\telse\n\t\t\t\t\tparent = parents[0];\n\t\t\t}\n\n\t\t\tresult.Add((T)Instantiate(model, position, rotation, parent));\n\t\t}\n\n\t\tif (result.Count == 0)\n\t\t\treturn null;\n\t\telse\n\t\t\treturn result.ToArray();\n\t}\n\n\tstatic T[] SpawnMultipleWithPrefabLink<T>(T model, int count, Vector3[] positions = null, Quaternion[] rotations = null, Transform[] parents = null) where T : Component\n\t{\n\t\tVector3 defaultPos = model.transform.position;\n\t\tQuaternion defaultRot = model.transform.rotation;\n\t\tList<T> result = new List<T>();\n\n\t\tfor (int i = 0; i < count; i++)\n\t\t{\n\t\t\tVector3 position = defaultPos;\n\n\t\t\tif (positions != null)\n\t\t\t{\n\t\t\t\tif (positions.Length > 1)\n\t\t\t\t\tposition = positions[i];\n\t\t\t\telse\n\t\t\t\t\tposition = positions[0];\n\t\t\t}\n\n\t\t\tQuaternion rotation = defaultRot;\n\n\t\t\tif (rotations != null)\n\t\t\t{\n\t\t\t\tif (rotations.Length > 1)\n\t\t\t\t\trotation = rotations[i];\n\t\t\t\telse\n\t\t\t\t\trotation = rotations[0];\n\t\t\t}\n\n\t\t\tTransform parent = null;\n\n\t\t\tif (parents != null)\n\t\t\t{\n\t\t\t\tif (parents.Length > 1)\n\t\t\t\t\tparent = parents[i];\n\t\t\t\telse\n\t\t\t\t\tparent = parents[0];\n\t\t\t}\n\n\t\t\tT obj = (T)PrefabUtility.InstantiatePrefab(model);\n\n\t\t\tobj.transform.SetParent(parent);\n\t\t\tobj.transform.position = position;\n\t\t\tobj.transform.rotation = rotation;\n\n\t\t\tresult.Add(obj);\n\t\t}\n\n\t\tif (result.Count == 0)\n\t\t\treturn null;\n\t\telse\n\t\t\treturn result.ToArray();\n\t}\n";
 	const string PLACEMENT_METHODS = "\n\tstatic void PlaceOnLine(Transform[] objects, Vector3 startPos, Vector3 direction, float distance, bool alignRotation = false)\n\t{\n\t\tfloat totalSize = distance * (objects.Length - 1);\n\t\tVector3 endPos = startPos + direction.normalized * totalSize;\n\n\t\tfor (int i = 0; i < objects.Length; i++)\n\t\t{\n\t\t\tobjects[i].position = Vector3.Lerp(startPos, endPos, (float)i / (objects.Length - 1));\n\n\t\t\tif (alignRotation)\n\t\t\t\tobjects[i].LookAt(endPos + direction);\n\t\t}\n\t}\n\n\tstatic void PlaceOnCircle(Transform[] objects, Vector3 startPos, Vector3 circleNormal, float radius, bool alignRotation = false)\n\t{\n\t\tVector3 dir = Vector3.forward * radius;\n\t\tGameObject holder = new GameObject(\"Holder\");\n\t\tholder.transform.position = startPos;\n\n\t\tList<Transform> previousParent = new List<Transform>();\n\n\t\tfor (int i = 0; i < objects.Length; i++)\n\t\t{\n\t\t\tpreviousParent.Add(objects[i].transform.parent);\n\n\t\t\tobjects[i].position = startPos + Quaternion.Euler(0, (float)i * 360 / objects.Length, 0) * dir;\n\t\t\tobjects[i].SetParent(holder.transform);\n\t\t}\n\n\t\tif (!alignRotation)\n\t\t{\n\t\t\tforeach (Transform child in holder.transform)\n\t\t\t\tchild.rotation = Quaternion.identity;\n\t\t}\n\n\t\tholder.transform.up = circleNormal;\n\n\t\tfor (int i = 0; i < objects.Length; i++)\n\t\t\tobjects[i].SetParent(previousParent[i]);\n\n\t\tDestroyImmediate(holder.gameObject);\n\t}\n\n\tstatic void SnapToGrid(Transform[] objects, float size, Vector3 startPos = default(Vector3))\n\t{\n\t\tforeach (Transform obj in objects)\n\t\t{\n\t\t\tVector3 pos = (obj.position - startPos) / size;\n\t\t\tpos = new Vector3(Mathf.RoundToInt(pos.x), Mathf.RoundToInt(pos.y), Mathf.RoundToInt(pos.z));\n\t\t\tobj.position = pos * size + startPos;\n\t\t}\n\t}\n\n\tstatic Object GetAsset(string name, Type type)\n\t{\n\t\tstring[] guids = AssetDatabase.FindAssets(\"t:\" + type.Name + \" \" + name);\n\n\t\tif (guids.Length > 0)\n\t\t\treturn AssetDatabase.LoadAssetAtPath(AssetDatabase.GUIDToAssetPath(guids[0]), type);\n\t\treturn null;\n\t}\n}";
 
+	const string REMOTE_NAME = "RemoteICEMethods";
+	const string REMOTE_CLASS = "\n\n[ICE]\nstatic class " + REMOTE_NAME + "\n{\n" + INSERTION_NOTE + "\n}";
+	const string METHOD_NAME_MARK = "[Method name]";
+	const string METHOD_BODY_MARK = "[Method body]";
+	const string METHOD_FORMAT = "static void " + METHOD_NAME_MARK + "()\n\t{\n\t\t" + METHOD_BODY_MARK + "\n\t}\n\n";
+	const string INSERTION_NOTE = "\t// method insertion point (do not remove)";
+
 	public const string ICE_PATH = "Assets/ICE.cs";
 	public const string PLACEHOLDER_MARK = "[Placeholder]";
 
+	public const string REMOTE_PATH = "Assets/Editor/RemoteICEMethods.cs";
+
 	const string SAVE_KEY = "ICE_Presets";
 	const string SELECTED_KEY = "ICE_Selected";
+
+	static string detectedRemotePath;
 
 	int SelectedPreset
 	{
@@ -32,9 +45,11 @@ public class InstantCodeExecution : EditorWindow
 	GUIStyle boldStyle;
 
 	List<CodePreset> presets;
+	List<ICEMethod> remoteMethods;
 	Vector2 scroll;
 	string presetName;
 	string editorCode;
+	bool remoteMode;
 
 	[MenuItem("Tools/ICE")]
 	static void ShowWindow()
@@ -57,8 +72,10 @@ public class InstantCodeExecution : EditorWindow
 	void Init(InstantCodeExecution window)
 	{
 		this.window = window;
-
 		editorCode = "";
+
+		// this tool does not behave well between assembly reloads
+		AssemblyReloadEvents.beforeAssemblyReload += () => window.Close();
 
 		if (presets == null)
 		{
@@ -66,6 +83,38 @@ public class InstantCodeExecution : EditorWindow
 
 			if (PlayerPrefs.HasKey(SAVE_KEY))
 				presets = JsonUtility.FromJson<PresetList>(PlayerPrefs.GetString(SAVE_KEY)).presets;
+		}
+
+		string[] guids = AssetDatabase.FindAssets("t:Script " + REMOTE_NAME);
+
+		if (guids.Length == 0)
+		{
+			string dirPath = Path.GetFullPath(REMOTE_PATH.Substring(0, REMOTE_PATH.LastIndexOf("/")));
+
+			if (!Directory.Exists(dirPath))
+				Directory.CreateDirectory(dirPath);
+
+			File.WriteAllText(Path.GetFullPath(REMOTE_PATH), INCLUDES + REMOTE_CLASS);
+			AssetDatabase.Refresh();
+			return;
+		}
+		else
+			detectedRemotePath = AssetDatabase.GUIDToAssetPath(guids[0]);
+
+		List<string> lines = new List<string>(File.ReadAllLines(detectedRemotePath));
+
+		if (remoteMethods == null)
+		{
+			remoteMethods = new List<ICEMethod>();
+
+			foreach (Type type in TypeCache.GetTypesWithAttribute<ICEAttribute>())
+			{
+				foreach (MethodInfo method in type.GetMethods(BindingFlags.Static | BindingFlags.NonPublic))
+				{
+					string line = lines.Find(item => item.Contains("static void " + method.Name));
+					remoteMethods.Add(new ICEMethod(method, line != null ? lines.IndexOf(line) : -1));
+				}
+			}
 		}
 
 		if (SelectedPreset != -1)
@@ -97,6 +146,70 @@ public class InstantCodeExecution : EditorWindow
 		EditorGUILayout.LabelField("Instant Code Execution", boldCenterStyle);
 		EditorGUILayout.Space();
 
+		EditorGUILayout.BeginHorizontal();
+		{
+			EditorGUILayout.Space();
+			GUI.color = remoteMode ? Color.white : Color.cyan;
+
+			if (GUILayout.Button("Code console"))
+				remoteMode = false;
+
+			EditorGUILayout.Space();
+			GUI.color = remoteMode ? Color.cyan : Color.white;
+
+			if (GUILayout.Button("Remote code"))
+				remoteMode = true;
+
+			EditorGUILayout.Space();
+			GUI.color = Color.white;
+		}
+		EditorGUILayout.EndHorizontal();
+
+		EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+
+		if (remoteMode)
+			DisplayRemotes();
+		else
+			DisplayConsole();
+
+		EditorGUILayout.Space();
+	}
+
+	void DisplayRemotes()
+	{
+		scroll = EditorGUILayout.BeginScrollView(scroll, GUI.skin.box);
+		{
+			if (remoteMethods.Count == 0)
+				EditorGUILayout.LabelField("No remote code found", boldCenterStyle, GUILayout.ExpandHeight(true));
+			else
+			{
+				foreach (ICEMethod method in remoteMethods)
+				{
+					EditorGUILayout.Space();
+					EditorGUILayout.BeginHorizontal(GUI.skin.box);
+					{
+						EditorGUILayout.LabelField(method.methodName);
+
+						if (method.isDefault && GUILayout.Button("Open file"))
+							method.Open();
+
+						GUI.color = Color.cyan;
+
+						if (GUILayout.Button("Execute"))
+							method.Execute();
+
+						GUI.color = Color.white;
+					}
+					EditorGUILayout.EndHorizontal();
+					EditorGUILayout.Space();
+				}
+			}
+			EditorGUILayout.EndScrollView();
+		}
+	}
+
+	void DisplayConsole()
+	{
 		EditorGUILayout.BeginHorizontal();
 		{
 			EditorGUILayout.LabelField("Preset name :", GUILayout.Width(80));
@@ -160,8 +273,14 @@ public class InstantCodeExecution : EditorWindow
 				Execute();
 
 			EditorGUILayout.Space();
+
+			if (GUILayout.Button("Save script"))
+				Save();
+
+			EditorGUILayout.Space();
 		}
 		EditorGUILayout.EndHorizontal();
+
 		EditorGUILayout.Space();
 	}
 
@@ -226,10 +345,73 @@ public class InstantCodeExecution : EditorWindow
 
 	void Execute()
 	{
-		File.WriteAllText(Path.GetFullPath(ICE_PATH), ICE_TEMPLATE.Replace(PLACEHOLDER_MARK, editorCode));
+		File.WriteAllText(Path.GetFullPath(ICE_PATH), INCLUDES + ICE_TEMPLATE.Replace(PLACEHOLDER_MARK, editorCode));
 		AssetDatabase.ImportAsset(ICE_PATH);
 
 		Deselect();
+	}
+
+	void Save()
+	{
+		string scriptContent = AssetDatabase.LoadAssetAtPath<TextAsset>(REMOTE_PATH).text;
+		int insertionIndex = scriptContent.IndexOf(INSERTION_NOTE);
+
+		// cleanup preset name
+		string presetName = presets[SelectedPreset].name;
+		string methodName = "";
+		bool needUpper = false;
+
+		foreach (char c in presetName)
+		{
+			if (c == ' ')
+				needUpper = true;
+			else
+			{
+				if (needUpper)
+				{
+					methodName += char.ToUpper(c);
+					needUpper = false;
+				}
+				else
+					methodName += c;
+			}
+		}
+
+		// same name method removal
+		int existingIndex = scriptContent.IndexOf("static void " + methodName);
+
+		if (existingIndex > -1)
+		{
+			insertionIndex = existingIndex;
+			int openCount = 0;
+			bool canClose = false;
+
+			for (int i = existingIndex; i < scriptContent.Length; i++)
+			{
+				char c = scriptContent[i];
+
+				if (c == '{')
+				{
+					canClose = true;
+					openCount++;
+				}
+
+				if (c == '}')
+					openCount--;
+
+				if (canClose && openCount == 0)
+				{
+					scriptContent = scriptContent.Remove(existingIndex, i - existingIndex + 3);
+					break;
+				}
+			}
+		}
+
+		// file writing
+		string newMethod = METHOD_FORMAT.Replace(METHOD_NAME_MARK, methodName).Replace(METHOD_BODY_MARK, editorCode);
+		File.WriteAllText(Path.GetFullPath(REMOTE_PATH), scriptContent.Insert(insertionIndex, newMethod));
+
+		AssetDatabase.Refresh();
 	}
 
 	void Deselect() => GUI.FocusControl(null);
@@ -253,6 +435,40 @@ public class InstantCodeExecution : EditorWindow
 			this.name = name;
 			code = "";
 		}
+	}
+
+	[Serializable]
+	public class ICEMethod
+	{
+		public readonly string methodName;
+		public readonly bool isDefault;
+
+		private Action execute;
+		private int lineIndex;
+
+		public ICEMethod(MethodInfo info, int lineIndex)
+		{
+			methodName = info.Name;
+			this.lineIndex = lineIndex + 1;
+			isDefault = lineIndex != -1;
+
+			if (!info.IsStatic)
+			{
+				Debug.LogError(
+					"Target method is not static. Make the target method static to make it invokable by this tool."
+				);
+				return;
+			}
+
+			execute = () => info.Invoke(null, null);
+		}
+
+		public void Open()
+		{
+			AssetDatabase.OpenAsset(AssetDatabase.LoadAssetAtPath<TextAsset>(detectedRemotePath), lineIndex);
+		}
+
+		public void Execute() => execute?.Invoke();
 	}
 }
 
@@ -355,4 +571,10 @@ public class ICE_API : EditorWindow
 		EditorGUILayout.Space();
 		EditorGUILayout.Space();
 	}
+}
+
+[AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
+public class ICEAttribute : Attribute
+{
+	public ICEAttribute() { }
 }
