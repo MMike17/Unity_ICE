@@ -16,10 +16,10 @@ public class InstantCodeExecution : EditorWindow
 	const string PLACEMENT_METHODS = "\n\tstatic void PlaceOnLine(Transform[] objects, Vector3 startPos, Vector3 direction, float distance, bool alignRotation = false)\n\t{\n\t\tfloat totalSize = distance * (objects.Length - 1);\n\t\tVector3 endPos = startPos + direction.normalized * totalSize;\n\n\t\tfor (int i = 0; i < objects.Length; i++)\n\t\t{\n\t\t\tobjects[i].position = Vector3.Lerp(startPos, endPos, (float)i / (objects.Length - 1));\n\n\t\t\tif (alignRotation)\n\t\t\t\tobjects[i].LookAt(endPos + direction);\n\t\t}\n\t}\n\n\tstatic void PlaceOnCircle(Transform[] objects, Vector3 startPos, Vector3 circleNormal, float radius, bool alignRotation = false)\n\t{\n\t\tVector3 dir = Vector3.forward * radius;\n\t\tGameObject holder = new GameObject(\"Holder\");\n\t\tholder.transform.position = startPos;\n\n\t\tList<Transform> previousParent = new List<Transform>();\n\n\t\tfor (int i = 0; i < objects.Length; i++)\n\t\t{\n\t\t\tpreviousParent.Add(objects[i].transform.parent);\n\n\t\t\tobjects[i].position = startPos + Quaternion.Euler(0, (float)i * 360 / objects.Length, 0) * dir;\n\t\t\tobjects[i].SetParent(holder.transform);\n\t\t}\n\n\t\tif (!alignRotation)\n\t\t{\n\t\t\tforeach (Transform child in holder.transform)\n\t\t\t\tchild.rotation = Quaternion.identity;\n\t\t}\n\n\t\tholder.transform.up = circleNormal;\n\n\t\tfor (int i = 0; i < objects.Length; i++)\n\t\t\tobjects[i].SetParent(previousParent[i]);\n\n\t\tDestroyImmediate(holder.gameObject);\n\t}\n\n\tstatic void SnapToGrid(Transform[] objects, float size, Vector3 startPos = default(Vector3))\n\t{\n\t\tforeach (Transform obj in objects)\n\t\t{\n\t\t\tVector3 pos = (obj.position - startPos) / size;\n\t\t\tpos = new Vector3(Mathf.RoundToInt(pos.x), Mathf.RoundToInt(pos.y), Mathf.RoundToInt(pos.z));\n\t\t\tobj.position = pos * size + startPos;\n\t\t}\n\t}\n\n\tstatic Object GetAsset(string name, Type type)\n\t{\n\t\tstring[] guids = AssetDatabase.FindAssets(\"t:\" + type.Name + \" \" + name);\n\n\t\tif (guids.Length > 0)\n\t\t\treturn AssetDatabase.LoadAssetAtPath(AssetDatabase.GUIDToAssetPath(guids[0]), type);\n\t\treturn null;\n\t}\n}";
 
 	const string REMOTE_NAME = "RemoteICEMethods";
-	const string REMOTE_CLASS = "\n\n[ICE]\nstatic class " + REMOTE_NAME + "\n{\n" + INSERTION_NOTE + "\n}";
+	const string REMOTE_CLASS = "\n\nstatic class " + REMOTE_NAME + "\n{\n" + INSERTION_NOTE + "\n}";
 	const string METHOD_NAME_MARK = "[Method name]";
 	const string METHOD_BODY_MARK = "[Method body]";
-	const string METHOD_FORMAT = "static void " + METHOD_NAME_MARK + "()\n\t{\n\t\t" + METHOD_BODY_MARK + "\n\t}\n\n";
+	const string METHOD_FORMAT = "[ICE]\nstatic void " + METHOD_NAME_MARK + "()\n\t{\n\t\t" + METHOD_BODY_MARK + "\n\t}\n\n";
 	const string INSERTION_NOTE = "\t// method insertion point (do not remove)";
 
 	public const string ICE_PATH = "Assets/ICE.cs";
@@ -107,13 +107,13 @@ public class InstantCodeExecution : EditorWindow
 		{
 			remoteMethods = new List<ICEMethod>();
 
-			foreach (Type type in TypeCache.GetTypesWithAttribute<ICEAttribute>())
+			foreach (MethodInfo method in TypeCache.GetMethodsWithAttribute<ICEAttribute>())
 			{
-				foreach (MethodInfo method in type.GetMethods(BindingFlags.Static | BindingFlags.NonPublic))
-				{
-					string line = lines.Find(item => item.Contains("static void " + method.Name));
-					remoteMethods.Add(new ICEMethod(method, line != null ? lines.IndexOf(line) : -1));
-				}
+				if (!method.IsStatic || method.ReturnType != typeof(void) || method.GetParameters().Length > 0)
+					return;
+
+				string line = lines.Find(item => item.Contains("static void " + method.Name));
+				remoteMethods.Add(new ICEMethod(method, line != null ? lines.IndexOf(line) : -1));
 			}
 		}
 
@@ -185,15 +185,16 @@ public class InstantCodeExecution : EditorWindow
 			{
 				foreach (ICEMethod method in remoteMethods)
 				{
-					EditorGUILayout.Space();
 					EditorGUILayout.BeginHorizontal(GUI.skin.box);
 					{
 						EditorGUILayout.LabelField(method.methodName);
+						EditorGUILayout.Space();
 
 						if (method.isDefault && GUILayout.Button("Open file"))
 							method.Open();
 
 						GUI.color = Color.cyan;
+						EditorGUILayout.Space();
 
 						if (GUILayout.Button("Execute"))
 							method.Execute();
@@ -201,7 +202,6 @@ public class InstantCodeExecution : EditorWindow
 						GUI.color = Color.white;
 					}
 					EditorGUILayout.EndHorizontal();
-					EditorGUILayout.Space();
 				}
 			}
 			EditorGUILayout.EndScrollView();
@@ -378,7 +378,7 @@ public class InstantCodeExecution : EditorWindow
 		}
 
 		// same name method removal
-		int existingIndex = scriptContent.IndexOf("static void " + methodName);
+		int existingIndex = scriptContent.IndexOf("static void " + methodName) - ("[ICE]\n".Length + 1);
 
 		if (existingIndex > -1)
 		{
@@ -573,7 +573,7 @@ public class ICE_API : EditorWindow
 	}
 }
 
-[AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
+[AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
 public class ICEAttribute : Attribute
 {
 	public ICEAttribute() { }
