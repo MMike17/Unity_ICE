@@ -11,7 +11,13 @@ _(Yes. This is a Neuromancer reference)_
 In the Unity Editor, in the top menu bar, under the "Tools" tab you'll find the "ICE" option.\
 This will open the I.C.E. editor window.
 
-![](.Screenshots/Main.png)
+This tool has two panels, the **Code console** and the **Remote code**.
+
+## Code console
+
+![](.Screenshots/Console.png)
+
+The code console panel provides you with a console in which you can directly type your code and a set of presets you can name, save and delete.
 
 ### Presets
 
@@ -24,6 +30,8 @@ In the big input box you can type your preset code.\
 This does not hold any of your IDE/code editor features.
 
 Everytime the code changes it is saved to its preset.
+
+⚠️ Do not press the `[ESCAPE]` key as it would cancel your current changes to your code. ⚠️
 
 ### API documentation
 
@@ -47,11 +55,27 @@ This will trigger and assembly reload and execute your code immediately.
 
 This tool generates a script called "**ICE.cs**" in the "Assets/" directory, a script with the same name and path will be overwritten.
 
+### Save script
+
+Press the "Save script" button to save this preset as a method with a similar name into an ICE remote methods script. This script is either the default generated script (at : "Assets/Editor/RemoteICEMethods.cs") or a script with the same name placed elsewhere in the project.
+
+You can find your preset saved to script in the **Remote code** panel.
+
 ### Code errors
 
 In case the code doesn't compile, the ICE.cs script will stay in your codebase at "Assets/ICE.cs" and the Unity console will provide you with error descriptions.
 
 If the ICE.cs script compiles it will get executed.
+
+## Remote code
+
+![](.Screenshots/Remote.png)
+
+The remote code panel lists all the methods marked as instantly executable.\
+If the methods are from the "RemoteICEMethods.cs" script, you can open that script to its corresponding line.
+
+You can also execute the method directly in the editor.\
+**Code executed from this panel will not need an assembly reload.**
 
 ## Support
 
