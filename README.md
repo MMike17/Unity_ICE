@@ -77,6 +77,16 @@ If the methods are from the "RemoteICEMethods.cs" script, you can open that scri
 You can also execute the method directly in the editor.\
 **Code executed from this panel will not need an assembly reload.**
 
+### Custom ICE methods
+
+You can write your own ICE remote methods anywhere in your codebase by adding the "ICE" attribute to them.\
+For a marked method to be taken into account it needs to follow 3 rules :
+- Be static
+- Have a **void** return type
+- Not have any parameters
+
+⚠️ The "ICE" attribute is defined in the editor script, it will only be available for scripts placed in a folder labeled "Editor". ⚠️
+
 ## Support
 
 This tool supports most of the C# features that your current Unity version supports, except for the following :
