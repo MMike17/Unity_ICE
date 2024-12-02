@@ -77,13 +77,27 @@ If the methods are from the "RemoteICEMethods.cs" script, you can open that scri
 You can also execute the method directly in the editor.\
 **Code executed from this panel will not need an assembly reload.**
 
+If the listed methods have parameters, they will be displayed, as editor fields if they're supported, or as the "not supported" message if they are not.
+
+The _supported_ parameter types are :
+- **bool**
+- **int**
+- **float**
+- **string**
+- **enum** types
+- **Vector2**
+- **Vector3**
+- **Color**
+- Any type inheriting from **UnityEngine.Object** (ex : Transform, MonoBehaviour, etc...)
+
+ICE methods also support default values for parameters.
+
 ### Custom ICE methods
 
 You can write your own ICE remote methods anywhere in your codebase by adding the "ICE" attribute to them.\
 For a marked method to be taken into account it needs to follow 3 rules :
 - Be static
 - Have a **void** return type
-- Not have any parameters
 
 ⚠️ The "ICE" attribute is defined in the editor script, it will only be available for scripts placed in a folder labeled "Editor". ⚠️
 
@@ -97,15 +111,15 @@ This tool supports most of the C# features that your current Unity version suppo
 The libraries included in the generated code are :
 
 - System
-- System.Collections;
-- System.Collections.Generic;
-- System.IO;
-- System.Linq;
-- UnityEditor;
-- UnityEditor.SceneManagement;
-- UnityEngine;
-- UnityEngine.SceneManagement;
-- UnityEngine.UI;
+- System.Collections
+- System.Collections.Generic
+- System.IO
+- System.Linq
+- UnityEditor
+- UnityEditor.SceneManagement
+- UnityEngine
+- UnityEngine.SceneManagement
+- UnityEngine.UI
 
 The generated code also holds two aliasses :
 
