@@ -5,6 +5,8 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
+using Object = UnityEngine.Object;
+
 /// <summary>Editor tool used to execute code in the editor</summary>
 public class InstantCodeExecution : EditorWindow
 {
@@ -109,8 +111,8 @@ public class InstantCodeExecution : EditorWindow
 
 			foreach (MethodInfo method in TypeCache.GetMethodsWithAttribute<ICEAttribute>())
 			{
-				if (!method.IsStatic || method.ReturnType != typeof(void) || method.GetParameters().Length > 0)
-					return;
+				if (!method.IsStatic || method.ReturnType != typeof(void))
+					continue;
 
 				string line = lines.Find(item => item.Contains("static void " + method.Name));
 				remoteMethods.Add(new ICEMethod(method, line != null ? lines.IndexOf(line) : -1));
@@ -185,27 +187,84 @@ public class InstantCodeExecution : EditorWindow
 			{
 				foreach (ICEMethod method in remoteMethods)
 				{
-					EditorGUILayout.BeginHorizontal(GUI.skin.box);
+					EditorGUILayout.BeginVertical(GUI.skin.box);
 					{
-						EditorGUILayout.LabelField(method.methodName);
+						EditorGUILayout.BeginHorizontal();
+						{
+							EditorGUILayout.LabelField(method.methodName, boldStyle);
+							EditorGUILayout.Space();
+
+							if (method.isDefault && GUILayout.Button("Open file"))
+								method.Open();
+
+							GUI.color = Color.cyan;
+							EditorGUILayout.Space();
+
+							if (GUILayout.Button("Execute"))
+								method.Execute();
+
+							GUI.color = Color.white;
+						}
+						EditorGUILayout.EndHorizontal();
+
 						EditorGUILayout.Space();
 
-						if (method.isDefault && GUILayout.Button("Open file"))
-							method.Open();
+						for (int i = 0; i < method.argsInfos.Length; i++)
+						{
+							Type argType = method.argsInfos[i].ParameterType;
 
-						GUI.color = Color.cyan;
-						EditorGUILayout.Space();
-
-						if (GUILayout.Button("Execute"))
-							method.Execute();
-
-						GUI.color = Color.white;
+							if (argType.IsSubclassOf(typeof(Object)))
+							{
+								method.args[i] = EditorGUILayout.ObjectField(
+									method.argsInfos[i].Name,
+									(Object)method.args[i],
+									argType,
+									true
+								);
+							}
+							else
+								method.args[i] = DisplayArgument(argType, method.argsInfos[i].Name, method.args[i]);
+						}
 					}
-					EditorGUILayout.EndHorizontal();
+					EditorGUILayout.EndVertical();
 				}
 			}
 			EditorGUILayout.EndScrollView();
 		}
+	}
+
+	T DisplayArgument<T>(Type argType, string label, T value)
+	{
+		if (argType.IsEnum)
+		{
+			return DirtyCast<T>(EditorGUILayout.Popup(
+				label,
+				value != null ? DirtyCast<int>(value) : 0,
+				Enum.GetNames(argType)
+			));
+		}
+
+		return argType switch
+		{
+			Type t when t == typeof(bool) => DirtyCast<T>(EditorGUILayout.Toggle(label, DirtyCast<bool>(value))),
+			Type t when t == typeof(int) => DirtyCast<T>(EditorGUILayout.IntField(label, DirtyCast<int>(value))),
+			Type t when t == typeof(float) => DirtyCast<T>(EditorGUILayout.FloatField(label, DirtyCast<float>(value))),
+			Type t when t == typeof(string) => DirtyCast<T>(EditorGUILayout.TextField(label, DirtyCast<string>(value))),
+			Type t when t == typeof(Color) => DirtyCast<T>(EditorGUILayout.ColorField(label, DirtyCast<Color>(value))),
+			Type t when t == typeof(Vector2) =>
+				DirtyCast<T>(EditorGUILayout.Vector2Field(label, DirtyCast<Vector2>(value))),
+			Type t when t == typeof(Vector3) =>
+				DirtyCast<T>(EditorGUILayout.Vector3Field(label, DirtyCast<Vector3>(value))),
+			_ => DisplayNoSupport<T>(argType)
+		};
+	}
+
+	T DirtyCast<T>(object value) => value != null ? (T)(object)value : default;
+
+	T DisplayNoSupport<T>(Type argType)
+	{
+		EditorGUILayout.LabelField("This tool doesn't support type [" + argType + "]");
+		return default;
 	}
 
 	void DisplayConsole()
@@ -442,16 +501,15 @@ public class InstantCodeExecution : EditorWindow
 	{
 		public readonly string methodName;
 		public readonly bool isDefault;
+		public readonly ParameterInfo[] argsInfos;
 
-		private Action execute;
+		public object[] args;
+
+		private Action<object[]> execute;
 		private int lineIndex;
 
 		public ICEMethod(MethodInfo info, int lineIndex)
 		{
-			methodName = info.Name;
-			this.lineIndex = lineIndex + 1;
-			isDefault = lineIndex != -1;
-
 			if (!info.IsStatic)
 			{
 				Debug.LogError(
@@ -460,7 +518,43 @@ public class InstantCodeExecution : EditorWindow
 				return;
 			}
 
-			execute = () => info.Invoke(null, null);
+			methodName = info.Name;
+			isDefault = lineIndex != -1;
+			argsInfos = info.GetParameters();
+
+			args = new object[argsInfos.Length];
+
+			for (int i = 0; i < args.Length; i++)
+			{
+				args[i] = GetDefaultValue(
+					argsInfos[i].ParameterType,
+					argsInfos[i].HasDefaultValue,
+					argsInfos[i].DefaultValue
+				);
+			}
+
+			execute = args => info.Invoke(null, args);
+			this.lineIndex = lineIndex + 1;
+		}
+
+		object GetDefaultValue(Type type, bool hasDefault, object defaultValue)
+		{
+			return type switch
+			{
+				Type t when t == typeof(bool) => hasDefault ? defaultValue : default(bool),
+				Type t when t == typeof(char) => hasDefault ? defaultValue : default(char),
+				Type t when t == typeof(int) => hasDefault ? defaultValue : default(int),
+				Type t when t == typeof(float) => hasDefault ? defaultValue : default(float),
+				Type t when t == typeof(string) => hasDefault ? defaultValue : default(string),
+				Type t when t == typeof(Color) => hasDefault ? defaultValue : default(Color),
+				Type t when t == typeof(AnimationCurve) =>
+					hasDefault ? defaultValue : default(AnimationCurve),
+				Type t when t == typeof(Vector2) =>
+					hasDefault ? defaultValue : default(Vector2),
+				Type t when t == typeof(Vector3) =>
+					hasDefault ? defaultValue : default(Vector3),
+				_ => null
+			};
 		}
 
 		public void Open()
@@ -468,7 +562,7 @@ public class InstantCodeExecution : EditorWindow
 			AssetDatabase.OpenAsset(AssetDatabase.LoadAssetAtPath<TextAsset>(detectedRemotePath), lineIndex);
 		}
 
-		public void Execute() => execute?.Invoke();
+		public void Execute() => execute?.Invoke(args);
 	}
 }
 
